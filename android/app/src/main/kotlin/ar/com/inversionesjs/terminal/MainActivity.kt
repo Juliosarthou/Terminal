@@ -1,4 +1,4 @@
-package ar.edu.unicen.faa.terminal
+package ar.com.inversionesjs.terminal
 
 import io.flutter.embedding.android.FlutterActivity
 
