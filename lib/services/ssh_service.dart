@@ -65,7 +65,16 @@ class SSHService extends ChangeNotifier {
       });
 
       _shell = await _client!.shell(
-        pty: const SSHPtyConfig(width: 80, height: 24),
+        pty: const SSHPtyConfig(
+          width: 80,
+          height: 24,
+          modes: {
+            SSHTerminalMode.ECHO: 1,
+            SSHTerminalMode.ICANON: 1,
+            SSHTerminalMode.ISIG: 1,
+            SSHTerminalMode.VERASE: 127, // Forzar 127 (DEL) como borrar
+          },
+        ),
       );
 
       _isConnected = true;
