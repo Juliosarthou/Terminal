@@ -49,7 +49,7 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddAccountDialog(context),
+        onPressed: () => _showAccountDialog(context),
         backgroundColor: const Color(0xFF6366F1),
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -153,26 +153,76 @@ class HomeScreen extends StatelessWidget {
           final account = accounts[index];
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFF334155),
-                  child: FaIcon(FontAwesomeIcons.terminal, size: 16, color: Colors.indigoAccent),
-                ),
-                title: Text(account.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${account.username}@${account.host}'),
-                trailing: const Icon(Icons.chevron_right, color: Colors.white38),
-                onTap: () {
-                  sshService.connect(account);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const TerminalScreen()),
+            child: Dismissible(
+              key: Key(account.id),
+              direction: DismissDirection.horizontal,
+              confirmDismiss: (direction) async {
+                if (direction == DismissDirection.endToStart) {
+                  // BORRAR (Hacia la izquierda)
+                  final bool? confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      backgroundColor: const Color(0xFF1E293B),
+                      title: const Text('Borrar Conexión'),
+                      content: Text('¿Estás seguro de que quieres borrar "${account.name}"?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Borrar', style: TextStyle(color: Colors.redAccent)),
+                        ),
+                      ],
+                    ),
                   );
-                },
+                  if (confirm == true) {
+                    sshService.removeAccount(account.id);
+                  }
+                  return confirm;
+                } else {
+                  // EDITAR (Hacia la derecha)
+                  _showAccountDialog(context, account: account);
+                  return false; // No borramos al deslizar a la derecha
+                }
+              },
+              background: Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 20),
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(Icons.edit, color: Colors.white),
+              ),
+              secondaryBackground: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFF334155),
+                    child: FaIcon(FontAwesomeIcons.terminal, size: 16, color: Colors.indigoAccent),
+                  ),
+                  title: Text(account.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('${account.username}@${account.host}'),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+                  onTap: () {
+                    sshService.connect(account);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const TerminalScreen()),
+                    );
+                  },
+                ),
               ),
             ),
           );
@@ -182,17 +232,17 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showAddAccountDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final hostController = TextEditingController();
-    final userController = TextEditingController();
-    final passwordController = TextEditingController();
+  void _showAccountDialog(BuildContext context, {SSHAccount? account}) {
+    final nameController = TextEditingController(text: account?.name);
+    final hostController = TextEditingController(text: account?.host);
+    final userController = TextEditingController(text: account?.username);
+    final passwordController = TextEditingController(text: account?.password);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Nueva Conexión SSH'),
+        title: Text(account == null ? 'Nueva Conexión SSH' : 'Editar Conexión'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -212,19 +262,25 @@ class HomeScreen extends StatelessWidget {
           ElevatedButton(
             onPressed: () {
               if (hostController.text.isNotEmpty && userController.text.isNotEmpty) {
-                final account = SSHAccount(
-                  id: DateTime.now().toString(),
+                final newAccount = SSHAccount(
+                  id: account?.id ?? DateTime.now().toString(),
                   name: nameController.text.isEmpty ? hostController.text : nameController.text,
                   host: hostController.text,
                   username: userController.text,
                   password: passwordController.text,
                 );
-                Provider.of<SSHService>(context, listen: false).addAccount(account);
+                
+                final service = Provider.of<SSHService>(context, listen: false);
+                if (account == null) {
+                  service.addAccount(newAccount);
+                } else {
+                  service.updateAccount(newAccount);
+                }
                 Navigator.pop(context);
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6366F1)),
-            child: const Text('Guardar'),
+            child: Text(account == null ? 'Guardar' : 'Actualizar'),
           ),
         ],
       ),

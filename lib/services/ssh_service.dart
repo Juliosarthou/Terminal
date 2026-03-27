@@ -33,7 +33,12 @@ class SSHService extends ChangeNotifier {
     // Manejo de entrada de teclado
     terminal.onOutput = (input) {
       if (_shell != null) {
-        _shell!.stdin.add(utf8.encode(input));
+        // MEJORA: Asegurar que backspace (\x7f o \x08) se envíe correctamente en SSH
+        if (input == '\x7f' || input == '\x08') {
+          _shell!.stdin.add(utf8.encode('\x7f')); // La mayoría de servidores Linux esperan \x7f
+        } else {
+          _shell!.stdin.add(utf8.encode(input));
+        }
       } else if (_localProcess != null) {
         if (input == '\r') {
           terminal.write('\r\n');
@@ -145,7 +150,14 @@ class SSHService extends ChangeNotifier {
     _isConnected = true;
     notifyListeners();
 
-    terminal.write('--- SHELL LOCAL ANDROID ---\r\n');
+    if (Platform.isIOS) {
+      terminal.write('\r\n[ERROR] Shell local no disponible en iOS.\r\n');
+      terminal.write('[INFO] iOS no permite ejecutar procesos de shell directamente debido al sandboxing del sistema.\r\n');
+      terminal.write('[TIP] Usa la conexión SSH para conectarte a un equipo remoto.\r\n');
+      return;
+    }
+
+    terminal.write('--- SHELL LOCAL DISPOSITIVO ---\r\n');
     terminal.write('[INFO] Usando alineación automática (\r\n).\r\n\r\n');
     
     try {
@@ -265,5 +277,14 @@ class SSHService extends ChangeNotifier {
     _accounts.removeWhere((a) => a.id == id);
     _saveAccounts();
     notifyListeners();
+  }
+
+  void updateAccount(SSHAccount updatedAccount) {
+    final index = _accounts.indexWhere((a) => a.id == updatedAccount.id);
+    if (index != -1) {
+      _accounts[index] = updatedAccount;
+      _saveAccounts();
+      notifyListeners();
+    }
   }
 }
