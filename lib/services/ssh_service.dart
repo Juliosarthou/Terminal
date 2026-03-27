@@ -28,12 +28,10 @@ class SSHService extends ChangeNotifier {
     // Manejo de entrada de teclado
     terminal.onOutput = (input) {
       if (_shell != null) {
-        // MEJORA: Asegurar que backspace (\x7f o \x08) se envíe correctamente en SSH
-        if (input == '\x7f' || input == '\x08') {
-          _shell!.stdin.add(utf8.encode('\x7f')); // La mayoría de servidores Linux esperan \x7f
-        } else {
-          _shell!.stdin.add(utf8.encode(input));
-        }
+        // MEJORA AGRESIVA: Mapear todas las variantes de backspace (\x7f, \x08, \b) a \x7f
+        // Esto soluciona el problema de borrado en iOS y servidores remotos variados.
+        final String mapped = input.replaceAll(RegExp(r'[\x7f\x08\b]'), '\x7f');
+        _shell!.stdin.add(utf8.encode(mapped));
       }
     };
 
@@ -65,16 +63,7 @@ class SSHService extends ChangeNotifier {
       });
 
       _shell = await _client!.shell(
-        pty: const SSHPtyConfig(
-          width: 80,
-          height: 24,
-          modes: {
-            SSHTerminalMode.ECHO: 1,
-            SSHTerminalMode.ICANON: 1,
-            SSHTerminalMode.ISIG: 1,
-            SSHTerminalMode.VERASE: 127, // Forzar 127 (DEL) como borrar
-          },
-        ),
+        pty: const SSHPtyConfig(width: 80, height: 24),
       );
 
       _isConnected = true;

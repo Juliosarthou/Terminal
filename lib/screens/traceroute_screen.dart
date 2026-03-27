@@ -65,9 +65,11 @@ class _TracerouteScreenState extends State<TracerouteScreen> {
         setState(() {
           _results.removeLast(); // Quitar el "escaneando"
           if (result.response != null) {
-            _results.add('Salto $ttl: ${result.response!.ip} (${result.response!.time?.inMilliseconds} ms)');
-            // Si llegamos al destino, terminamos
-            if (result.response!.ip == host || result.summary != null) {
+            final String responderIp = result.response!.ip ?? 'Desconocido';
+            _results.add('Salto $ttl: $responderIp (${result.response!.time?.inMilliseconds} ms)');
+            
+            // Si la IP que respondió es IGUAL a la del host objetivo, hemos terminado.
+            if (responderIp == host) {
               _isStopping = true;
             }
           } else if (result.error != null) {
