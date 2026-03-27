@@ -68,6 +68,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    - shorebird.yaml
 
 flutter_launcher_icons:
   android: "launcher_icon"
