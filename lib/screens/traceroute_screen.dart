@@ -32,14 +32,23 @@ class _TracerouteScreenState extends State<TracerouteScreen> {
       _isStopping = false;
     });
 
-    final String host = _hostController.text.trim();
-    if (host.isEmpty) {
+    final String hostInput = _hostController.text.trim();
+    if (hostInput.isEmpty) {
       setState(() => _isRunning = false);
       return;
     }
 
     try {
-      // Intentar una traza básica incrementando TTL
+      // 1. Resolver el dominio a IP para comparar correctamente
+      final addresses = await InternetAddress.lookup(hostInput);
+      if (addresses.isEmpty) throw 'No se pudo resolver el host';
+      final String hostIp = addresses.first.address;
+
+      setState(() {
+        _results.add('Rastreando ruta a $hostInput [$hostIp]...');
+      });
+
+      // 2. Bucle de traza por TTL
       for (int ttl = 1; ttl <= 30; ttl++) {
         if (_isStopping || !mounted) break;
 
@@ -47,7 +56,7 @@ class _TracerouteScreenState extends State<TracerouteScreen> {
           _results.add('Salto $ttl: Escaneando...');
         });
 
-        final ping = Ping(host, count: 1, ttl: ttl, timeout: 2);
+        final ping = Ping(hostIp, count: 1, ttl: ttl, timeout: 2);
         final completer = Completer<PingData>();
         
         // ignore: cancel_subscriptions
@@ -57,7 +66,7 @@ class _TracerouteScreenState extends State<TracerouteScreen> {
           }
         });
 
-        final result = await completer.future.timeout(const Duration(seconds: 3), onTimeout: () => const PingData());
+        final result = await completer.future.timeout(const Duration(seconds: 4), onTimeout: () => const PingData());
         sub.cancel();
 
         if (!mounted) break;
@@ -68,8 +77,8 @@ class _TracerouteScreenState extends State<TracerouteScreen> {
             final String responderIp = result.response!.ip ?? 'Desconocido';
             _results.add('Salto $ttl: $responderIp (${result.response!.time?.inMilliseconds} ms)');
             
-            // Si la IP que respondió es IGUAL a la del host objetivo, hemos terminado.
-            if (responderIp == host) {
+            // Si la IP que respondió es IGUAL a la del host objetivo, hemos llegado.
+            if (responderIp == hostIp) {
               _isStopping = true;
             }
           } else if (result.error != null) {
