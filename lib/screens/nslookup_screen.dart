@@ -29,31 +29,41 @@ class _NslookupScreenState extends State<NslookupScreen> {
         throw 'Ingresa un host válido';
       }
 
-      final dns = DnsClient.google(); // Fallback o default
-      // En la versión 1.3.1 de dns_client la API puede variar. 
-      // Usaremos una aproximación robusta.
-      
       _results.add('Consultando $host usando DNS $dnsServer...');
-      
-      final addresses = await InternetAddress.lookup(host);
+
+      // Creamos el cliente DNS apuntando al servidor especificado
+      final dns = DnsClient.udp(InternetAddress(dnsServer));
+      final responses = await dns.lookup(host);
       
       if (!mounted) return;
       setState(() {
-        if (addresses.isEmpty) {
+        if (responses.isEmpty) {
           _results.add('No se encontraron registros.');
         } else {
-          for (var addr in addresses) {
+          for (var addr in responses) {
             _results.add('Result: ${addr.address} (${addr.type})');
           }
         }
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _results.add('Error: $e');
-        _isLoading = false;
-      });
+      // Fallback a lookup del sistema si falla
+      try {
+        final addresses = await InternetAddress.lookup(_hostController.text.trim());
+        if (mounted) {
+          setState(() {
+            _results.add('(Fallback Sistema) Result: ${addresses.first.address}');
+            _isLoading = false;
+          });
+        }
+      } catch (e2) {
+        if (mounted) {
+          setState(() {
+            _results.add('Error: $e');
+            _isLoading = false;
+          });
+        }
+      }
     }
   }
 
