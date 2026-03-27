@@ -28,9 +28,12 @@ class SSHService extends ChangeNotifier {
     // Manejo de entrada de teclado
     terminal.onOutput = (input) {
       if (_shell != null) {
-        // MEJORA AGRESIVA: Mapear todas las variantes de backspace (\x7f, \x08, \b) a \x7f
-        // Esto soluciona el problema de borrado en iOS y servidores remotos variados.
-        final String mapped = input.replaceAll(RegExp(r'[\x7f\x08\b]'), '\x7f');
+        // MEJORA AGRESIVA: 
+        // 1. Mapear backspace a \x7f
+        // 2. Mapear \r (Enter en xterm) a \n para evitar el problema de "doble enter" en algunos servidores linux
+        String mapped = input.replaceAll(RegExp(r'[\x7f\x08\b]'), '\x7f');
+        if (mapped == '\r') mapped = '\n'; 
+        
         _shell!.stdin.add(utf8.encode(mapped));
       }
     };
