@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:dns_client/dns_client.dart';
 
 class NslookupScreen extends StatefulWidget {
   const NslookupScreen({super.key});
@@ -32,29 +31,34 @@ class _NslookupScreenState extends State<NslookupScreen> {
       _results.add('Consultando $host usando DNS $dnsServer...');
       
       try {
-        // En dns_client 1.3.1, DnsClient es abstracto pero tiene un factory que toma una lista de servidores
-        final dns = DnsClient([InternetAddress(dnsServer)]);
-        final responses = await dns.lookup(host);
-        
-        if (!mounted) return;
-        setState(() {
-          if (responses.isEmpty) {
-            _results.add('No se encontraron registros en el servidor DNS.');
+        if (Platform.isAndroid) {
+          // En Android el comando nslookup suele estar disponible vía toolbox/toybox
+          final process = await Process.run('nslookup', [host, dnsServer]);
+          if (process.exitCode == 0) {
+            _results.add(process.stdout.toString());
           } else {
-            for (var addr in responses) {
-              _results.add('Result: ${addr.address} (${addr.type})');
-            }
+            throw 'nslookup falló: ${process.stderr}';
           }
-          _isLoading = false;
-        });
-      } catch (dnsError) {
-        // Fallback al sistema si el cliente DNS falla
-        _results.add('Error DNS personalizado: $dnsError. Intentando resolver con el sistema...');
+        } else {
+          // En iOS (y fallback Android) usamos el resolver del sistema
+          final addresses = await InternetAddress.lookup(host);
+          if (!mounted) return;
+          setState(() {
+            _results.add('(Nota: iOS usa DNS del sistema)');
+            for (var addr in addresses) {
+              _results.add('Result: ${addr.address}');
+            }
+          });
+        }
+        if (mounted) setState(() => _isLoading = false);
+      } catch (err) {
+        // Fallback final a InternetAddress.lookup si nslookup falla
         final addresses = await InternetAddress.lookup(host);
         if (mounted) {
           setState(() {
+            _results.add('Nota: Usando resolver del sistema debido a: $err');
             for (var addr in addresses) {
-              _results.add('Result (Sistema): ${addr.address}');
+              _results.add('Result: ${addr.address}');
             }
             _isLoading = false;
           });
