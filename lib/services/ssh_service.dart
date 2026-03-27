@@ -16,12 +16,7 @@ class SSHService extends ChangeNotifier {
 
   SSHClient? _client;
   SSHSession? _shell;
-  Process? _localProcess;
   final Terminal terminal = Terminal(maxLines: 10000);
-  int _localTypedCount = 0; // Rastrear caracteres escritos en shell local
-  final List<String> _localHistory = []; // Historial manual para shell local
-  int _localHistoryPointer = -1; // Puntero al historial
-  String _localCurrentBuffer = ""; // Lo que el usuario está escribiendo actualmente
 
   bool _isConnected = false;
   bool get isConnected => _isConnected;
@@ -38,59 +33,6 @@ class SSHService extends ChangeNotifier {
           _shell!.stdin.add(utf8.encode('\x7f')); // La mayoría de servidores Linux esperan \x7f
         } else {
           _shell!.stdin.add(utf8.encode(input));
-        }
-      } else if (_localProcess != null) {
-        if (input == '\r') {
-          terminal.write('\r\n');
-          _localProcess!.stdin.add(utf8.encode('\n'));
-          if (_localCurrentBuffer.trim().isNotEmpty) {
-            _localHistory.add(_localCurrentBuffer);
-          }
-          _localHistoryPointer = _localHistory.length;
-          _localCurrentBuffer = "";
-          _localTypedCount = 0;
-        } else if (input == '\x7f' || input == '\x08') {
-          if (_localTypedCount > 0) {
-            terminal.write('\b \b');
-            _localProcess!.stdin.add(utf8.encode('\x08'));
-            _localTypedCount--;
-            if (_localCurrentBuffer.isNotEmpty) {
-              _localCurrentBuffer = _localCurrentBuffer.substring(0, _localCurrentBuffer.length - 1);
-            }
-          }
-        } else if (input == '\x1b[A' || input == '\x1b[B') {
-          // GESTIÓN MANUAL DE HISTORIAL (UP / DOWN)
-          if (_localHistory.isEmpty) return;
-
-          if (input == '\x1b[A' && _localHistoryPointer > 0) {
-            _localHistoryPointer--;
-          } else if (input == '\x1b[B' && _localHistoryPointer < _localHistory.length - 1) {
-            _localHistoryPointer++;
-          } else {
-            return;
-          }
-
-          // 1. Borrar lo que haya actualmente en pantalla y en el buffer de la shell
-          String backspaces = '\b' * _localTypedCount;
-          _localProcess!.stdin.add(utf8.encode(backspaces)); // Borra buffer shell
-          terminal.write('\b \b' * _localTypedCount); // Borra visualmente
-
-          // 2. Cargar comando del historial
-          String newCmd = _localHistory[_localHistoryPointer];
-          terminal.write(newCmd);
-          _localProcess!.stdin.add(utf8.encode(newCmd));
-          
-          // 3. Actualizar estado
-          _localCurrentBuffer = newCmd;
-          _localTypedCount = newCmd.length;
-        } else {
-          // No hacemos eco visual de secuencias de escape
-          if (!input.startsWith('\x1B')) {
-            terminal.write(input);
-            _localTypedCount += input.length;
-            _localCurrentBuffer += input;
-          }
-          _localProcess!.stdin.add(utf8.encode(input));
         }
       }
     };
@@ -143,93 +85,11 @@ class SSHService extends ChangeNotifier {
     }
   }
 
-  Future<void> connectLocal() async {
-    _error = null;
-    disconnect();
-    clearTerminal(); // Iniciamos con pantalla limpia
-    _isConnected = true;
-    notifyListeners();
-
-    if (Platform.isIOS) {
-      terminal.write('\r\n[ERROR] Shell local no disponible en iOS.\r\n');
-      terminal.write('[INFO] iOS no permite ejecutar procesos de shell directamente debido al sandboxing del sistema.\r\n');
-      terminal.write('[TIP] Usa la conexión SSH para conectarte a un equipo remoto.\r\n');
-      return;
-    }
-
-    terminal.write('--- SHELL LOCAL DISPOSITIVO ---\r\n');
-    terminal.write('[INFO] Usando alineación automática (\r\n).\r\n\r\n');
-    
-    try {
-      final shellPath = Platform.isAndroid ? '/system/bin/sh' : (Platform.isWindows ? 'cmd.exe' : '/bin/sh');
-      
-      // MEJORAMOS EL PATH PARA QUE ls, cd, etc FUNCIONEN DIRECTAMENTE
-      final Map<String, String> environment = {
-        'TERM': 'xterm-256color',
-        'PATH': '/system/bin:/system/xbin:/vendor/bin:/sbin:/bin:/usr/bin:/usr/sbin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/data/local/tmp',
-        'HOME': Platform.isAndroid ? '/sdcard' : '.',
-        'USER': 'android',
-        'PS1': '\$ ' // Prompt limpio y profesional
-      };
-
-      try {
-        _localProcess = await Process.start(
-          shellPath,
-          Platform.isAndroid ? ['-i'] : [],
-          environment: environment,
-          includeParentEnvironment: true,
-          workingDirectory: Platform.isAndroid ? '/sdcard' : null,
-        );
-      } catch (e) {
-        // Fallback si /sdcard falla (p. ej. permisos o desktop)
-        _localProcess = await Process.start(
-          shellPath,
-          Platform.isAndroid ? ['-i'] : [],
-          environment: environment,
-          includeParentEnvironment: true,
-        );
-      }
-
-      _localProcess!.stdout.transform(utf8.decoder).listen((data) {
-        // Si hay una nueva línea en la salida, reiniciamos el contador de escritura
-        if (data.contains('\n') || data.contains('\r')) {
-          _localTypedCount = 0;
-          _localCurrentBuffer = "";
-          _localHistoryPointer = _localHistory.length;
-        }
-        // IMPORTANTE: Convertimos LF a CRLF para evitar el efecto 'escalera' en shell local
-        terminal.write(data.replaceAll(RegExp(r'\r?\n'), '\r\n'));
-      });
-      
-      _localProcess!.stderr.transform(utf8.decoder).listen((data) {
-        if (data.contains('\n') || data.contains('\r')) {
-          _localTypedCount = 0;
-          _localCurrentBuffer = "";
-          _localHistoryPointer = _localHistory.length;
-        }
-        terminal.write(data.replaceAll(RegExp(r'\r?\n'), '\r\n'));
-      });
-
-      notifyListeners();
-      await _localProcess!.exitCode;
-      _isConnected = false;
-      terminal.write('\r\n--- Shell finalizado ---\r\n');
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      terminal.write('\r\nError Shell Local: $e\r\n');
-      _isConnected = false;
-      notifyListeners();
-    }
-  }
-
   void disconnect() {
     _shell?.close();
     _client?.close();
-    _localProcess?.kill();
     _shell = null;
     _client = null;
-    _localProcess = null;
     _isConnected = false;
     // Limpiamos la terminal al desconectar para una nueva sesión limpia
     terminal.write('\r\n[INFO] Conexión cerrada.\r\n');
@@ -242,9 +102,6 @@ class SSHService extends ChangeNotifier {
     // Forzamos el prompt en la shell
     if (_shell != null) {
       _shell!.stdin.add(utf8.encode('\x0c')); // Ctrl+L (Clear & Refresh en SSH)
-    } else if (_localProcess != null) {
-      _localProcess!.stdin.add(utf8.encode('\n')); // Enter (Forzar nuevo prompt en Local)
-      _localTypedCount = 0;
     }
     
     notifyListeners();

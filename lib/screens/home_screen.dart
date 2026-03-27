@@ -5,6 +5,8 @@ import 'package:terminal/models/ssh_account.dart';
 import 'package:terminal/services/ssh_service.dart';
 import 'package:terminal/screens/terminal_screen.dart';
 import 'package:terminal/screens/ping_screen.dart';
+import 'package:terminal/screens/traceroute_screen.dart';
+import 'package:terminal/screens/nslookup_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -90,17 +92,21 @@ class HomeScreen extends StatelessWidget {
           Colors.blueAccent,
           () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PingScreen())),
         ),
-        const SizedBox(width: 15),
+        const SizedBox(width: 10),
         _toolCard(
           context,
-          'Local',
-          FontAwesomeIcons.terminal,
-          Colors.purpleAccent,
-          () {
-            final sshService = Provider.of<SSHService>(context, listen: false);
-            sshService.connectLocal();
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const TerminalScreen()));
-          },
+          'Trace',
+          FontAwesomeIcons.route,
+          Colors.orangeAccent,
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TracerouteScreen())),
+        ),
+        const SizedBox(width: 10),
+        _toolCard(
+          context,
+          'Lookup',
+          FontAwesomeIcons.magnifyingGlass,
+          Colors.tealAccent,
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NslookupScreen())),
         ),
       ],
     );
