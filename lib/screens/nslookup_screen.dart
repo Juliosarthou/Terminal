@@ -32,7 +32,7 @@ class _NslookupScreenState extends State<NslookupScreen> {
       _results.add('Consultando $host usando DNS $dnsServer...');
 
       // Creamos el cliente DNS apuntando al servidor especificado
-      final dns = DnsClient.udp(InternetAddress(dnsServer));
+      final dns = DnsClient(remoteAddress: InternetAddress(dnsServer));
       final responses = await dns.lookup(host);
       
       if (!mounted) return;
