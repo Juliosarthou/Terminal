@@ -73,7 +73,7 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icons/app_icon.png"
+  image_path: "assets/icons/app_icon_round.png"
   min_sdk_android: 21
 
   # To add assets to your application, add an assets section, like this:

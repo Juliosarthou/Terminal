@@ -1,0 +1,60 @@
+# Configuración de CI/CD para Terminal SSH en Codemagic
+# Documentación: https://docs.codemagic.io/yaml-basic-configuration/yaml-getting-started/
+
+workflows:
+  ios-release:
+    name: iOS Release Shorebird
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      groups:
+        - apple_auth # Se define en la UI de Codemagic para subir a App Store
+      vars:
+        # Generar token con 'shorebird login:ci' y pegarlo como secreto en Codemagic UI
+        SHOREBIRD_TOKEN: ${SHOREBIRD_TOKEN} 
+    scripts:
+      - name: Install Shorebird
+        script: |
+          curl -proto '=https' -tlsv1.2 -sSf https://install.shorebird.dev | bash
+          echo "export PATH=\"$HOME/.shorebird/bin:\$PATH\"" >> $CM_EXPORT_PATH
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Shorebird Release iOS
+        script: |
+          # El flag --verbose ayuda a debuguear fallos de firma
+          shorebird release ios --verbose
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - juliosarthou@gmail.com # Ajustado según el repo del usuario
+        on_failure: true
+
+  android-release:
+    name: Android Release Shorebird
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      vars:
+        SHOREBIRD_TOKEN: ${SHOREBIRD_TOKEN}
+    scripts:
+      - name: Install Shorebird
+        script: |
+          curl -proto '=https' -tlsv1.2 -sSf https://install.shorebird.dev | bash
+          echo "export PATH=\"$HOME/.shorebird/bin:\$PATH\"" >> $CM_EXPORT_PATH
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Shorebird Release Android
+        script: |
+          shorebird release android --verbose
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
+    publishing:
+      email:
+        recipients:
+          - juliosarthou@gmail.com
+        on_failure: true
